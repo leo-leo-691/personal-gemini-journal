@@ -78,12 +78,7 @@ A summary alone is a read‑back. It closes the loop on *understanding* but not 
 
 **<https://personal-gemini-journal-426042943892.us-central1.run.app>**
 
-1. Open the URL. `/` redirects to `/journal`, which is auth‑guarded and sends you to `/login`.
-2. Sign up / sign in with email + password, or **Continue with Google**.
-3. Click **New journal session**.
-4. Write a reflection and send it; continue the conversation for a few turns.
-5. Open the **Insight Rail** (right side) → **Summary** tab → *Summarize this session*.
-6. Switch to the **Actions** tab → *Generate Action Intelligence*.
+Open the production URL. `/` redirects to `/login`. Sign in with email/password or Continue with Google, start a journal session, write a reflection, then open the Insight Rail on the right and try Summary and Actions (AI Action Intelligence).
 
 ---
 
@@ -140,7 +135,7 @@ The browser talks only to **Firebase Authentication** (to sign in) and to the ap
 | **Cloud Firestore** | The persistent journal — sessions, messages, summaries, and Action Intelligence, all under `users/{uid}/…`. Client rules are deny‑all. |
 | **Gemini API** (`@google/genai`, `gemini-3.5-flash`) | The reasoning engine for all three AI operations: conversation, Summary, Action Intelligence. |
 | **Google Cloud Run** | Production hosting — the standalone Next.js server, a dedicated runtime service account, autoscaling. |
-| **Google Cloud Secret Manager** | Holds the Gemini API key; injected into Cloud Run as an environment variable **at runtime only**. |
+| **Google Cloud Secret Manager** | Injected into the Cloud Run service as the `GEMINI_API_KEY` environment variable from Secret Manager at runtime; never in source, build args, or the client bundle. |
 
 These are load‑bearing, not decorative — remove any one and a core feature stops working.
 
@@ -228,6 +223,7 @@ Verified against the **deployed** service (revision `personal-gemini-journal-000
 
 | Check | Result |
 |---|---|
+| Public routing & login endpoint | PASS — `/` redirects to `/login`; `/login` returns `200` |
 | Unauthenticated / bad‑token request → `401` | PASS |
 | Cross‑user IDOR (read, delete, Action Intelligence on another user's session) | PASS — `404` |
 | UID spoofing via request body | PASS — ignored |
@@ -332,6 +328,8 @@ npm run dev     # http://localhost:3000
 
 Two distinct kinds of configuration — **do not mix them**:
 
+The Gemini key is passed only as a runtime secret from Secret Manager; it is never passed as a build argument or exposed as a public variable. Firebase Web configuration is separate public client configuration and may be supplied at build time.
+
 | Variables | What they are | Sensitivity |
 |---|---|---|
 | `NEXT_PUBLIC_FIREBASE_*` | Public Firebase **Web App** config. Next.js inlines these into the browser bundle at build time — expected for Firebase web config. | Not secret |
@@ -343,7 +341,7 @@ Two distinct kinds of configuration — **do not mix them**:
 
 Google Cloud Run (`us-central1`), built from source with a multi‑stage Docker image (`node:20-alpine`, non‑root user, standalone Next.js server on port `8080`).
 
-Principles: a **dedicated runtime service account** with least‑privilege roles (Datastore user + Firebase Auth viewer) authenticating via **ADC** (no JSON key); **public Firebase web config** passed at build time; the **Gemini key** passed as a **runtime secret** from Secret Manager.
+Principles: a **dedicated runtime service account** with least‑privilege roles (Datastore user + Firebase Auth viewer) authenticating via **ADC** (no JSON key); **public Firebase web config** passed at build time; the **Gemini key** passed as a **runtime secret** from Secret Manager (never as a build argument or public variable).
 
 ```bash
 # Store the Gemini key in Secret Manager (value from a local file you never commit)
