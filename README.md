@@ -10,8 +10,9 @@
 
 | | |
 |---|---|
-| **▶ Live demo** | <https://personal-gemini-journal-426042943892.us-central1.run.app> |
-| **Source** | <https://github.com/leo-leo-691/personal-gemini-journal> |
+| **▶ Live Demo** | <https://personal-gemini-journal-426042943892.us-central1.run.app> |
+| **💻 Source Code** | <https://github.com/leo-leo-691/personal-gemini-journal> |
+| **🎥 Demo Social Post link** | <https://www.linkedin.com/posts/arindam691_accelerateaiwithcloudrun-googlecloud-gemini-ugcPost-7502429187983523840-6cl_/?utm_source=social_share_send&utm_medium=android_app&rcm=ACoAAEMOX9UBY5WH_wR2K_gb_3sZmKKWvVtlUr8&utm_campaign=copy_link> |
 
 ### 30‑second overview
 
