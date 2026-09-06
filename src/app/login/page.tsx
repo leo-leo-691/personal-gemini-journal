@@ -9,7 +9,7 @@ import {
   signInWithEmail,
   signUpWithEmail,
 } from '@/lib/firebase-client';
-import { Sparkles, Lock, Mail, ArrowRight } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -51,124 +51,136 @@ export default function LoginPage() {
     }
   };
 
-  return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-12 relative overflow-hidden">
-      {/* Background Decorative Gradients */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/20 to-pink-600/20 rounded-full blur-3xl pointer-events-none" />
+  const field =
+    'h-10 w-full rounded-sm border border-hairline bg-canvas px-3 text-ui text-ink caret-accent transition-colors duration-fast placeholder:text-ink-3 hover:border-hairline-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:opacity-45';
 
-      <div className="w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-8 shadow-2xl relative z-10">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white mb-4 shadow-lg shadow-indigo-500/20">
-            <Sparkles className="w-6 h-6" />
-          </div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-            Personal Gemini Journal
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">
-            {isSignUp ? 'Create your secure account' : 'Sign in to your private journal'}
-          </p>
+  return (
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-4 py-12">
+      {/* One quiet wash. No gradient orb, no glow. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-40 left-1/2 h-[420px] w-[620px] -translate-x-1/2 rounded-full"
+        style={{
+          background:
+            'radial-gradient(closest-side, color-mix(in oklab, var(--accent) 8%, transparent), transparent)',
+        }}
+      />
+
+      <div className="relative w-full max-w-[380px]">
+        <div className="grid h-7 w-7 place-items-center rounded-md bg-accent-quiet">
+          <span className="block h-2.5 w-2.5 rounded-[2px] bg-accent" aria-hidden="true" />
         </div>
 
+        <h1 className="mt-6 font-serif text-display text-ink">
+          {isSignUp ? 'Start your journal.' : 'Your journal is waiting.'}
+        </h1>
+        <p className="mt-2 text-ui text-ink-3">Private by default. Only you and this page.</p>
+
         {error && (
-          <div className="mb-6 p-3 bg-red-950/60 border border-red-800/60 rounded-xl text-red-300 text-xs font-medium">
+          <div
+            role="alert"
+            aria-live="polite"
+            className="mt-6 rounded-sm border border-critical/30 bg-critical-quiet px-3.5 py-3 text-ui-sm text-ink"
+          >
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-              Email Address
+            <label
+              htmlFor="email"
+              className="block font-mono text-label uppercase text-ink-3"
+            >
+              Email
             </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-              />
-            </div>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              disabled={loading}
+              className={`mt-2 ${field}`}
+            />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
+            <label
+              htmlFor="password"
+              className="block font-mono text-label uppercase text-ink-3"
+            >
               Password
             </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-              />
-            </div>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete={isSignUp ? 'new-password' : 'current-password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••••"
+              disabled={loading}
+              className={`mt-2 ${field}`}
+            />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 text-white font-medium py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 text-sm transition-all disabled:opacity-50"
+            aria-busy={loading}
+            className="mt-1 inline-flex h-10 items-center justify-center gap-2 rounded-sm bg-accent-strong text-ui font-semibold text-accent-on transition-[filter,transform] duration-fast hover:brightness-110 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focusring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
           >
             {loading ? (
-              'Processing...'
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} aria-hidden="true" />
+                {isSignUp ? 'Creating account…' : 'Signing in…'}
+              </>
             ) : (
               <>
-                {isSignUp ? 'Create Account' : 'Sign In'}
-                <ArrowRight className="w-4 h-4" />
+                {isSignUp ? 'Create account' : 'Sign in'}
+                <ArrowRight className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
               </>
             )}
           </button>
+
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+            type="button"
+            className="inline-flex h-10 items-center justify-center gap-2.5 rounded-sm border border-hairline-strong text-ui text-ink transition-colors duration-fast hover:bg-surface-hover disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focusring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#EA4335"
+                d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z"
+              />
+              <path
+                fill="#4285F4"
+                d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9c-.6-1.5-1-3.2-1-5z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"
+              />
+            </svg>
+            Continue with Google
+          </button>
         </form>
 
-        <div className="relative my-6 text-center">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-800" />
-          </div>
-          <span className="relative bg-slate-900 px-3 text-xs text-slate-500 uppercase tracking-wider">
-            Or continue with
-          </span>
-        </div>
-
-        <button
-          onClick={handleGoogleSignIn}
-          disabled={loading}
-          type="button"
-          className="w-full bg-slate-950 border border-slate-800 hover:bg-slate-800/50 text-slate-200 font-medium py-2.5 px-4 rounded-xl text-sm flex items-center justify-center gap-3 transition-all disabled:opacity-50"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
-            <path
-              fill="#EA4335"
-              d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z"
-            />
-            <path
-              fill="#4285F4"
-              d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9c-.6-1.5-1-3.2-1-5z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"
-            />
-          </svg>
-          Google OAuth
-        </button>
-
-        <p className="text-center text-xs text-slate-400 mt-6">
-          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+        <p className="mt-6 text-center text-ui-sm text-ink-3">
+          {isSignUp ? 'Already have an account?' : 'No account yet?'}{' '}
           <button
             onClick={() => setIsSignUp(!isSignUp)}
-            className="text-indigo-400 font-semibold hover:underline"
+            className="text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focusring"
           >
-            {isSignUp ? 'Sign In' : 'Sign Up'}
+            {isSignUp ? 'Sign in' : 'Create one'}
           </button>
         </p>
       </div>

@@ -10,7 +10,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ARG NEXT_PUBLIC_FIREBASE_API_KEY
+ARG NEXT_PUBLIC_FIREBASE_API_KEY=
 ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=geminijournal-507414.firebaseapp.com
 ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID=geminijournal-507414
 ARG NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=geminijournal-507414.firebasestorage.app

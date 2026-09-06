@@ -6,45 +6,31 @@ import {
   appendMessage,
 } from '@/server/firestore-db';
 import { generateReply } from '@/server/gemini';
+import { rateLimit } from '@/server/rate-limit';
+import { isValidSessionId } from '@/server/validation';
 
-// In-memory rate limiting store (prototype level)
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_MAX = 30; // Max 30 chats per minute
+// Best-effort in-memory per-user rate limit (see src/server/rate-limit.ts for
+// the horizontal-scaling caveat). Max 30 chat turns per minute per user.
+const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-
-function isRateLimited(uid: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(uid);
-
-  if (!entry || now > entry.resetTime) {
-    rateLimitMap.set(uid, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
-    return false;
-  }
-
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return true;
-  }
-
-  entry.count++;
-  return false;
-}
 
 export async function POST(req: Request) {
   try {
     const uid = await verifyIdToken(req);
 
-    if (isRateLimited(uid)) {
+    const rl = rateLimit(`chat:${uid}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW);
+    if (rl.limited) {
       return NextResponse.json(
         { error: 'Too many requests. Please slow down.' },
-        { status: 429 }
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
       );
     }
 
     const body = await req.json();
     const { sessionId, message } = body;
 
-    if (!sessionId || typeof sessionId !== 'string') {
-      return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
+    if (!isValidSessionId(sessionId)) {
+      return NextResponse.json({ error: 'Invalid or missing sessionId' }, { status: 400 });
     }
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {

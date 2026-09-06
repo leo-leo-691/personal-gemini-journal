@@ -2,14 +2,194 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────
+   Quiet Intelligence — semantic tokens
+   Dark is the default theme (:root). `.theme-light` on <html>
+   switches to cool paper. Nothing here is component-specific.
+   ───────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
+  color-scheme: dark;
+
+  --canvas: #0b1017;
+  --surface: #10161f;
+  --surface-raised: #151c26;
+  --surface-hover: #1b2331;
+
+  --hairline: #1e2634;
+  --hairline-strong: #2a3441;
+
+  --text-primary: #e8ebf1;
+  --text-secondary: #a9b4c4;
+  --text-tertiary: #6e7a8b;
+  --text-disabled: #4a5464;
+
+  --accent: #78add8;
+  --accent-strong: #4e90c6;
+  --accent-on-strong: #08121b;
+  --accent-quiet: #1a2a38;
+
+  --warm: #d9bb90;
+  --warm-quiet: #241f17;
+
+  --positive: #86c7a6;
+
+  --critical: #e2897c;
+  --critical-strong: #b4463a;
+  --critical-quiet: #2a1512;
+
+  --focus: #78add8;
+
+  --backdrop: rgb(6 9 13 / 0.62);
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.28), 0 4px 12px rgb(0 0 0 / 0.22);
+  --shadow-overlay: 0 12px 40px rgb(0 0 0 / 0.45);
+}
+
+.theme-light {
+  color-scheme: light;
+
+  --canvas: #f7f8fa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: #eff1f5;
+
+  --hairline: #e3e6ec;
+  --hairline-strong: #cdd3dc;
+
+  --text-primary: #141a23;
+  --text-secondary: #4a5461;
+  --text-tertiary: #78828f;
+  --text-disabled: #a2aab5;
+
+  --accent: #2e6e9e;
+  --accent-strong: #245c87;
+  --accent-on-strong: #ffffff;
+  --accent-quiet: #e8f0f7;
+
+  --warm: #8a6a3c;
+  --warm-quiet: #f6f0e4;
+
+  --positive: #2f7a57;
+
+  --critical: #a63f31;
+  --critical-strong: #a63f31;
+  --critical-quiet: #fbedea;
+
+  --focus: #2e6e9e;
+
+  --backdrop: rgb(20 26 35 / 0.34);
+  --shadow-raised: 0 1px 2px rgb(20 26 35 / 0.08), 0 4px 12px rgb(20 26 35 / 0.08);
+  --shadow-overlay: 0 12px 40px rgb(20 26 35 / 0.18);
+}
+
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  transition: background-color 200ms ease-out, color 200ms ease-out;
+}
+
+/* Selection stays quiet and legible in both themes. */
+::selection {
+  background: var(--accent-quiet);
+  color: var(--text-primary);
+}
+
+/* Scrollbars: hairline, never chrome-heavy. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Motion: opacity + transform only ───────────────────────── */
+
+@keyframes qi-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes qi-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes qi-dot {
+  0%,
+  100% {
+    opacity: 0.22;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@keyframes qi-shimmer {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes qi-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes qi-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

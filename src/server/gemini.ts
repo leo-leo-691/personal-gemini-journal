@@ -1,6 +1,39 @@
 import { GoogleGenAI } from '@google/genai';
 import { JournalMessage, ActionIntelligenceSchema } from './firestore-db';
 
+/**
+ * Typed Gemini failure so callers/routes can distinguish a transient
+ * quota/availability problem from a genuine generation/application error, and
+ * so a truncated response is never silently persisted as a success.
+ */
+export type GeminiErrorCode = 'QUOTA' | 'TRUNCATED' | 'GENERATION';
+
+export class GeminiError extends Error {
+  public code: GeminiErrorCode;
+  constructor(code: GeminiErrorCode, message: string) {
+    super(message);
+    this.name = 'GeminiError';
+    this.code = code;
+  }
+}
+
+/**
+ * Maps an unknown error thrown by the @google/genai client to a GeminiError.
+ * The client serialises the HTTP status and JSON body into `error.message`,
+ * e.g. `got status: 429 Too Many Requests. {"error":{"status":"RESOURCE_EXHAUSTED"...`.
+ */
+function classifyGeminiError(error: unknown): GeminiError {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (/RESOURCE_EXHAUSTED|got status:\s*(429|503)|UNAVAILABLE|prepayment credits/i.test(raw)) {
+    return new GeminiError('QUOTA', 'The AI service is temporarily unavailable (quota/availability).');
+  }
+  return new GeminiError('GENERATION', 'AI generation failed.');
+}
+
+function finishReasonOf(response: any): string | undefined {
+  return response?.candidates?.[0]?.finishReason;
+}
+
 const getApiKey = () => {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
@@ -50,42 +83,68 @@ export async function generateReply(
 }
 
 export async function generateSummary(history: JournalMessage[]): Promise<string> {
-  try {
-    const transcript = history.map((m) => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
+  const transcript = history.map((m) => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
 
-    const response = await ai.models.generateContent({
+  // Bound the output explicitly: the goal is a short, finished summary, not an
+  // unbounded essay. This keeps the visible answer well under the token limit
+  // regardless of how much internal reasoning the model does.
+  const prompt = `Write a concise reflective summary of the journal transcript below.
+
+Rules:
+- 3 to 5 complete sentences, no more than about 120 words total.
+- Cover the main themes, the overall emotional tone, and one or two key insights.
+- Finish every sentence. Do not stop mid-thought.
+- Return ONLY the finished summary text — no preamble, title, headings, or bullet points.
+
+TRANSCRIPT:
+${transcript}`;
+
+  let response: any;
+  try {
+    response = await ai.models.generateContent({
       model: MODEL_NAME,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: `Summarize the primary themes, emotional reflection, and insights from this journal transcript:\n\n${transcript}`,
-            },
-          ],
-        },
-      ],
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
-        maxOutputTokens: 400,
+        // The prompt caps the visible summary at ~120 words (~180 tokens).
+        // gemini-3.5-flash also spends output-token budget on internal
+        // reasoning before emitting text; 400 and 1024 both fell below that
+        // overhead and returned finishReason=MAX_TOKENS with little/no visible
+        // output. 2048 is the same ceiling already proven to work for
+        // /api/action-plan; with the bounded prompt the model finishes (STOP)
+        // well before reaching it.
+        maxOutputTokens: 2048,
         temperature: 0.4,
       },
     });
-
-    return response.text?.trim() || 'Summary of recent journal entries.';
   } catch (error) {
     console.error('Gemini generateSummary error:', error);
-    throw new Error('Failed to generate summary');
+    throw classifyGeminiError(error);
   }
+
+  const finishReason = finishReasonOf(response);
+  if (finishReason === 'MAX_TOKENS') {
+    console.error('Gemini generateSummary truncated: finishReason=MAX_TOKENS');
+    throw new GeminiError(
+      'TRUNCATED',
+      'The summary was cut off before completion and was not saved. Please try again.'
+    );
+  }
+
+  const text = response?.text?.trim();
+  if (!text) {
+    // Do not silently persist a canned/default summary.
+    throw new GeminiError('GENERATION', 'The AI returned an empty summary.');
+  }
+  return text;
 }
 
 export async function generateActionIntelligence(
   summary: string,
   history: JournalMessage[]
 ): Promise<ActionIntelligenceSchema> {
-  try {
-    const transcript = history.map((m) => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
-    const prompt = `Based on the following journal summary and history, extract reflection insights and non-clinical action steps.
+  const transcript = history.map((m) => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
+  const prompt = `Based on the following journal summary and history, extract reflection insights and non-clinical action steps.
 
 SUMMARY: ${summary}
 TRANSCRIPT: ${transcript}
@@ -99,32 +158,55 @@ Return ONLY a valid JSON object matching this structure:
   "actionPlan": "string"
 }`;
 
-    const response = await ai.models.generateContent({
+  let response: any;
+  try {
+    response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: 'application/json',
-        maxOutputTokens: 1000,
+        // 1000 truncated the JSON mid-string in production ("Unterminated
+        // string in JSON at position 69"). 2048 gives the structured output room.
+        maxOutputTokens: 2048,
         temperature: 0.3,
       },
     });
-
-    const rawText = response.text?.trim() || '{}';
-    const parsed = JSON.parse(rawText);
-
-    // Schema Validation
-    const validated: ActionIntelligenceSchema = {
-      keyIdeas: Array.isArray(parsed.keyIdeas) ? parsed.keyIdeas.map(String) : [],
-      insights: Array.isArray(parsed.insights) ? parsed.insights.map(String) : [],
-      actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems.map(String) : [],
-      suggestedNextStep: typeof parsed.suggestedNextStep === 'string' ? parsed.suggestedNextStep : '',
-      actionPlan: typeof parsed.actionPlan === 'string' ? parsed.actionPlan : '',
-    };
-
-    return validated;
   } catch (error) {
     console.error('Gemini generateActionIntelligence error:', error);
-    throw new Error('Failed to generate Action Intelligence schema');
+    throw classifyGeminiError(error);
   }
+
+  const finishReason = finishReasonOf(response);
+  if (finishReason === 'MAX_TOKENS') {
+    console.error('Gemini generateActionIntelligence truncated: finishReason=MAX_TOKENS');
+    throw new GeminiError(
+      'TRUNCATED',
+      'Action Intelligence generation was cut off before completion. Please try again.'
+    );
+  }
+
+  const rawText = response?.text?.trim();
+  if (!rawText) {
+    throw new GeminiError('GENERATION', 'The AI returned an empty Action Intelligence response.');
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch (error) {
+    console.error('Gemini generateActionIntelligence JSON parse error:', error);
+    throw new GeminiError('GENERATION', 'The AI returned malformed Action Intelligence data.');
+  }
+
+  // Schema Validation
+  const validated: ActionIntelligenceSchema = {
+    keyIdeas: Array.isArray(parsed.keyIdeas) ? parsed.keyIdeas.map(String) : [],
+    insights: Array.isArray(parsed.insights) ? parsed.insights.map(String) : [],
+    actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems.map(String) : [],
+    suggestedNextStep: typeof parsed.suggestedNextStep === 'string' ? parsed.suggestedNextStep : '',
+    actionPlan: typeof parsed.actionPlan === 'string' ? parsed.actionPlan : '',
+  };
+
+  return validated;
 }
