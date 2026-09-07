@@ -221,7 +221,8 @@ users/{uid}/journalSessions/{sessionId}/messages/{messageId}
 ## 🛡️ Production Security Verification
 
 The HTTP‑surface checks below were probed live against the **deployed** service
-(revision `personal-gemini-journal-00005-ddc`, 100% traffic); the auth /
+(the current revision serves 100% of traffic and is built from the head of
+`main` — the container image tag is that commit's short SHA). The auth /
 isolation / Gemini‑flow checks are covered by the automated test suite (129
 tests) and by prior live verification of the same application code.
 
@@ -243,7 +244,7 @@ tests) and by prior live verification of the same application code.
 | Deployment fact | Value |
 |---|---|
 | Service / Region / Project | `personal-gemini-journal` · `us-central1` · `geminijournal-507414` |
-| Serving revision | `personal-gemini-journal-00005-ddc` (100% traffic) |
+| Serving revision | latest revision, 100% traffic — image built from the head of `main` |
 | Challenge label | `dev-tutorial=cloud-run-ai-challenge` |
 | Runtime service account | `journal-runner@geminijournal-507414.iam.gserviceaccount.com` |
 | Gemini credential | `GEMINI_API_KEY` ← Secret Manager `gemini-api-key:1` (runtime only) |
