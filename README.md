@@ -79,7 +79,7 @@ A summary alone is a read‑back. It closes the loop on *understanding* but not 
 
 **<https://personal-gemini-journal-426042943892.us-central1.run.app>**
 
-Open the production URL. `/` redirects to `/login`. Sign in with email/password or Continue with Google, start a journal session, write a reflection, then open the Insight Rail on the right and try Summary and Actions (AI Action Intelligence).
+Open the production URL. `/` sends you to the journal, and if you're not signed in you land on `/login`. Sign in with email/password or Continue with Google, start a journal session, write a reflection, then open the Insight Rail on the right and try Summary and Actions (AI Action Intelligence).
 
 ---
 
@@ -220,12 +220,15 @@ users/{uid}/journalSessions/{sessionId}/messages/{messageId}
 
 ## 🛡️ Production Security Verification
 
-Verified against the **deployed** service (revision `personal-gemini-journal-00004-2f9`, 100% traffic):
+The HTTP‑surface checks below were probed live against the **deployed** service
+(revision `personal-gemini-journal-00005-ddc`, 100% traffic); the auth /
+isolation / Gemini‑flow checks are covered by the automated test suite (129
+tests) and by prior live verification of the same application code.
 
 | Check | Result |
 |---|---|
-| Public routing & login endpoint | PASS — `/` redirects to `/login`; `/login` returns `200` |
-| Unauthenticated / bad‑token request → `401` | PASS |
+| Public routing & login endpoint | PASS — `/` returns `307` → `/journal`; unauthenticated visitors land on `/login`; `/login` returns `200` |
+| Unauthenticated / bad‑token request → `401` | PASS (probed live) |
 | Cross‑user IDOR (read, delete, Action Intelligence on another user's session) | PASS — `404` |
 | UID spoofing via request body | PASS — ignored |
 | Session deletion | PASS |
@@ -234,13 +237,13 @@ Verified against the **deployed** service (revision `personal-gemini-journal-000
 | Gemini Summary | PASS |
 | Gemini Action Intelligence | PASS |
 | Action Intelligence concurrency protection → `409` | PASS |
-| Security headers present on responses | PASS |
-| No secrets in production bundles or logs | PASS |
+| Security headers present on responses | PASS (probed live) — 5 static headers + a per‑request nonce CSP with no `'unsafe-inline'` / `'unsafe-eval'` in `script-src` |
+| No secrets in production bundles or logs | PASS (probed live) — only the public Firebase web config is in the client bundle; the Gemini key is never present |
 
 | Deployment fact | Value |
 |---|---|
 | Service / Region / Project | `personal-gemini-journal` · `us-central1` · `geminijournal-507414` |
-| Serving revision | `personal-gemini-journal-00004-2f9` (100% traffic) |
+| Serving revision | `personal-gemini-journal-00005-ddc` (100% traffic) |
 | Challenge label | `dev-tutorial=cloud-run-ai-challenge` |
 | Runtime service account | `journal-runner@geminijournal-507414.iam.gserviceaccount.com` |
 | Gemini credential | `GEMINI_API_KEY` ← Secret Manager `gemini-api-key:1` (runtime only) |
@@ -391,10 +394,11 @@ src/
     └── validation.ts       isValidSessionId() · normalizeTitle()
 
 tests/            20 files, 129 tests
-security/         architecture.md · security-constitution.md · threat-model.md
+src/middleware.ts per-request nonce Content-Security-Policy
+security/         architecture.md · security-constitution.md · threat-model.md · ai-studio-config.md
 firestore.rules   deny-all
-next.config.js    standalone output + security headers (incl. CSP)
-Dockerfile        multi-stage · non-root · port 8080
+next.config.js    standalone output + static security headers
+Dockerfile        multi-stage · non-root · port 8080 · required Firebase build args
 ```
 
 ---
