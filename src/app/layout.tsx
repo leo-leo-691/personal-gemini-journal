@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { Newsreader, Manrope, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
@@ -45,8 +46,9 @@ export const metadata: Metadata = {
 
 /**
  * Pre-hydration theme resolution. Without this the app paints dark and then
- * repaints light for light-theme users. Relies on `script-src 'unsafe-inline'`,
- * which the existing CSP already allows.
+ * repaints light for light-theme users. The inline script carries the
+ * per-request CSP nonce minted in `src/middleware.ts` (read here from the
+ * `x-nonce` request header), so `script-src` no longer needs `'unsafe-inline'`.
  */
 const THEME_SCRIPT = `(function(){try{var s=localStorage.getItem('pgj-theme');var m=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches;if(s==='light'||(!s&&m)){document.documentElement.classList.add('theme-light')}}catch(e){}})();`;
 
@@ -55,6 +57,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const nonce = headers().get('x-nonce') ?? undefined;
+
   return (
     <html
       lang="en"
@@ -62,7 +66,7 @@ export default function RootLayout({
       className={`${serif.variable} ${sans.variable} ${mono.variable}`}
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body className="antialiased bg-canvas text-ink">{children}</body>
     </html>

@@ -26,6 +26,17 @@ export function isValidSessionId(value: unknown): value is string {
 export const MAX_TITLE_LENGTH = 80;
 
 /**
+ * Maximum length of a single journal message (post-trim), in characters.
+ *
+ * Single source of truth for two limits that must agree:
+ *   - the Firestore persistence cap in `appendMessage()`
+ *   - the API input cap in `POST /api/chat`, applied *before* the message is
+ *     persisted or sent to Gemini so an oversized payload is rejected outright
+ *     rather than silently truncated.
+ */
+export const MAX_MESSAGE_LENGTH = 4000;
+
+/**
  * A valid session title is a non-empty (after trimming) string of at most
  * MAX_TITLE_LENGTH characters. Returns the trimmed title, or null if invalid.
  */

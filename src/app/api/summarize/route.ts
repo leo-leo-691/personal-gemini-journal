@@ -34,7 +34,9 @@ export async function POST(req: Request) {
     }
 
     try {
-      // Atomic transaction guard to block racing/duplicate summary calls
+      // Atomic transaction guard to block racing/duplicate summary calls for
+      // the same session. Uses a 5-minute timestamped lease so a lock orphaned
+      // by a dead process self-heals instead of wedging the session forever.
       const canProceed = await beginSummary(uid, sessionId);
       if (!canProceed) {
         return NextResponse.json(

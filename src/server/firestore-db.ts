@@ -1,6 +1,6 @@
 import { adminDb } from './firebase-admin';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { MAX_TITLE_LENGTH } from './validation';
+import { MAX_TITLE_LENGTH, MAX_MESSAGE_LENGTH } from './validation';
 
 export interface ActionIntelligenceSchema {
   keyIdeas: string[];
@@ -37,6 +37,7 @@ export interface JournalSession {
   lastMessageAt?: string | null;
   summary?: string;
   summaryInProgress?: boolean;
+  summaryStartedAt?: string;
   actionPlanInProgress?: boolean;
   actionPlanStartedAt?: string;
   tags?: string[] | null;
@@ -99,6 +100,7 @@ export async function createSession(
     lastMessageAt: now,
     summary: '',
     summaryInProgress: false,
+    summaryStartedAt: null,
     actionPlanInProgress: false,
     actionPlanStartedAt: null,
     tags: null,
@@ -139,6 +141,7 @@ export async function listSessions(uid: string): Promise<JournalSession[]> {
       lastMessageAt: serializeTimestamp(data.lastMessageAt) ?? undefined,
       summary: data.summary || '',
       summaryInProgress: !!data.summaryInProgress,
+      summaryStartedAt: serializeTimestamp(data.summaryStartedAt) ?? undefined,
       actionPlanInProgress: !!data.actionPlanInProgress,
       actionPlanStartedAt: serializeTimestamp(data.actionPlanStartedAt) ?? undefined,
       tags: data.tags || null,
@@ -172,6 +175,7 @@ export async function getSessionMetadata(
     lastMessageAt: serializeTimestamp(data.lastMessageAt) ?? undefined,
     summary: data.summary || '',
     summaryInProgress: !!data.summaryInProgress,
+    summaryStartedAt: serializeTimestamp(data.summaryStartedAt) ?? undefined,
     actionPlanInProgress: !!data.actionPlanInProgress,
     actionPlanStartedAt: serializeTimestamp(data.actionPlanStartedAt) ?? undefined,
     tags: data.tags || null,
@@ -231,7 +235,10 @@ export async function appendMessage(
 
   const messageData = {
     role,
-    text: text.slice(0, 4000), // Enforce 4,000 char per message cap
+    // Persistence cap. `POST /api/chat` already rejects anything longer than
+    // MAX_MESSAGE_LENGTH before this point; this slice is defence-in-depth for
+    // any other caller and shares its limit with the API/Gemini input cap.
+    text: text.slice(0, MAX_MESSAGE_LENGTH),
     ts: now,
   };
 
@@ -311,7 +318,22 @@ export async function renameSession(
 }
 
 /**
+ * Time-bounded lease for the summary generation lock. Mirrors
+ * `ACTION_PLAN_LEASE_MS`: a `summaryInProgress` flag orphaned by a dead process
+ * would otherwise block that one session's summarize forever, so the lock also
+ * carries a `summaryStartedAt` Timestamp and a lease older than this window is
+ * considered abandoned and may be reclaimed.
+ */
+export const SUMMARY_LEASE_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
  * Firestore transaction guard to prevent duplicate/racing summarize requests
+ * for the same session. Uses a timestamped lease (see `SUMMARY_LEASE_MS`) so a
+ * stale lock left by a dead process self-heals.
+ *
+ * Returns `true` when the caller acquired (or reclaimed) the lease, `false` when
+ * another request holds a still-active lease. The read + write happen inside one
+ * Firestore transaction, so two concurrent callers can never both acquire.
  */
 export async function beginSummary(uid: string, sessionId: string): Promise<boolean> {
   const sessionRef = adminDb
@@ -327,11 +349,27 @@ export async function beginSummary(uid: string, sessionId: string): Promise<bool
     }
 
     const data = doc.data();
+    const now = Timestamp.now();
+
     if (data?.summaryInProgress) {
-      return false; // Already in progress
+      const startedAt = data.summaryStartedAt;
+      const startedMs =
+        startedAt && typeof startedAt.toMillis === 'function' ? startedAt.toMillis() : null;
+
+      // An in-progress flag with no (or unreadable) timestamp is treated as
+      // stale so it can never wedge the session permanently.
+      const leaseActive = startedMs !== null && now.toMillis() - startedMs < SUMMARY_LEASE_MS;
+      if (leaseActive) {
+        return false; // Another request holds a still-valid lease.
+      }
+      // Otherwise the lease is stale/abandoned: fall through and reclaim it
+      // within this same transaction.
     }
 
-    transaction.update(sessionRef, { summaryInProgress: true });
+    transaction.update(sessionRef, {
+      summaryInProgress: true,
+      summaryStartedAt: now,
+    });
     return true;
   });
 }
@@ -350,6 +388,7 @@ export async function completeSummary(
   await sessionRef.update({
     summary,
     summaryInProgress: false,
+    summaryStartedAt: null,
     updatedAt: Timestamp.now(),
   });
 }
@@ -363,6 +402,7 @@ export async function failSummary(uid: string, sessionId: string): Promise<void>
 
   await sessionRef.update({
     summaryInProgress: false,
+    summaryStartedAt: null,
   });
 }
 

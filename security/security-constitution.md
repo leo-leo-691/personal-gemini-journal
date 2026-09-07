@@ -21,8 +21,32 @@
 ### 4. Explicit Trigger Lifecycle & Atomic Summary Guard
 - Session creation, session deletion, summarization, and action plan generation are strictly explicit, user-triggered API calls.
 - No client-side timers, background inactivity triggers, or automatic side effects exist.
-- Summary generation is guarded by a Firestore transaction flag (`summaryInProgress`). Dual/racing summarization requests for the same session return an immediate 409 Conflict without invoking Gemini.
+- Summary generation and action plan generation are each guarded by a Firestore transaction lease (`summaryInProgress` + `summaryStartedAt`, `actionPlanInProgress` + `actionPlanStartedAt`). Dual/racing requests for the same session return an immediate 409 Conflict without invoking Gemini. The lease is time-bounded (5 minutes): a lock orphaned by a dead process is reclaimed atomically inside the transaction instead of wedging the session permanently.
 
 ### 5. CSRF & Security Headers
 - Authentication uses `Authorization: Bearer` headers exclusively. No auth cookies are set or read, removing CSRF as an applicable threat by design.
-- Standard global security headers (`HSTS`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Content-Security-Policy`) are set on all responses.
+- Standard global security headers (`HSTS`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`) are set on all responses via `next.config.js`.
+- `Content-Security-Policy` is set per request in `src/middleware.ts` so it can carry a fresh nonce. `script-src` contains no `'unsafe-inline'` and no `'unsafe-eval'`; the single inline bootstrap script (pre-hydration theme resolution) carries the request nonce. `style-src 'unsafe-inline'` is retained and documented (inline `style` attribute on the auth screen and Next.js built-in error pages, neither of which can carry a nonce).
+
+---
+
+## Google AI Studio Configuration
+
+Google AI Studio was configured with a "Production Security Constitution" as the
+Phase 1 system-instruction preset for this challenge. See
+[`ai-studio-config.md`](./ai-studio-config.md) for the **verbatim** instructions
+as entered into AI Studio, the screenshot evidence
+(`ai-studio-config-1.png`, `ai-studio-config-2.png`), and how each area
+(threat modeling, authentication/authorization, data isolation, secret
+management, AI/prompt security, input/API security, cloud security, verification)
+maps to the implemented controls in this repository.
+
+The AI Studio system instruction is a development-time constitution for how code
+was generated and reviewed. It is distinct from the **runtime** Gemini system
+instruction in [`../src/server/gemini.ts`](../src/server/gemini.ts), which governs
+the journal assistant's behaviour on live user requests.
+
+Chronology note: the initial application prototype was committed on 2026-09-05;
+the AI Studio configuration file and screenshots were added to the repository on
+2026-09-07. The configuration is genuine, but the repository does not assert that
+it existed before the first line of application code was written.

@@ -7,7 +7,7 @@ import {
 } from '@/server/firestore-db';
 import { generateReply } from '@/server/gemini';
 import { rateLimit } from '@/server/rate-limit';
-import { isValidSessionId } from '@/server/validation';
+import { isValidSessionId, MAX_MESSAGE_LENGTH } from '@/server/validation';
 
 // Best-effort in-memory per-user rate limit (see src/server/rate-limit.ts for
 // the horizontal-scaling caveat). Max 30 chat turns per minute per user.
@@ -35,6 +35,15 @@ export async function POST(req: Request) {
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json({ error: 'message content is required' }, { status: 400 });
+    }
+
+    // Reject an oversized message BEFORE it is persisted or sent to Gemini.
+    // Never silently truncate and forward a shortened version.
+    if (message.trim().length > MAX_MESSAGE_LENGTH) {
+      return NextResponse.json(
+        { error: `message exceeds the ${MAX_MESSAGE_LENGTH}-character limit` },
+        { status: 400 }
+      );
     }
 
     // Explicit check: session MUST already exist. No implicit session creation!

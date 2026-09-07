@@ -251,7 +251,7 @@ Verified against the **deployed** service (revision `personal-gemini-journal-000
 
 | Check | Result |
 |---|---|
-| `npm test` (Vitest) | **96 / 96 passing**, **15 test files** |
+| `npm test` (Vitest) | **129 / 129 passing**, **20 test files** |
 | `npx tsc --noEmit` | passing (TypeScript `strict`) |
 | `npm run build` (`next build`) | passing |
 | Production end‑to‑end verification | passing (above) |
@@ -260,8 +260,10 @@ Verified against the **deployed** service (revision `personal-gemini-journal-000
 The tests cover:
 
 - **Authorization & isolation** — 401s, cross‑user IDOR, UID‑spoofing, session‑ID validation on every route.
-- **Security headers** — every required header is configured.
-- **Concurrency** — the Action Intelligence lease (acquire / reclaim‑when‑stale / release) and the Summary transaction guard.
+- **Security headers** — every required static header is configured, and the per‑request CSP from `src/middleware.ts` carries a fresh nonce with no `'unsafe-inline'` / `'unsafe-eval'` in `script-src`.
+- **Concurrency** — the Action Intelligence and Summary leases (acquire / reclaim‑when‑stale / release), each verified against a real Firestore transaction.
+- **Input limits** — `POST /api/chat` rejects a message over the 4,000‑character cap *before* it reaches Gemini or Firestore; the persistence layer enforces the same limit.
+- **Prompt‑injection secret boundary** — an application‑level regression test that injection payloads never cause the API to leak the Gemini key or system instruction (it does not attempt to prove Gemini's own model‑level resistance).
 - **Gemini failure handling** — truncated and empty responses are rejected and never persisted; quota errors map to `503`; malformed JSON becomes a typed error, not a crash.
 - **Session rename / date handling / default titles** — ownership‑checked rename, timestamps never render `Invalid Date`, missing dates never become "now".
 - **UI behaviour** — title‑only heading, one metadata line, no chat bubbles, inline send‑error with optimistic‑message rollback, and the rule that a failed generation never shows stale insights beside an error.
@@ -322,7 +324,7 @@ cp .env.example .env.local      # then fill in YOUR OWN values
 gcloud auth application-default login       # Firebase Admin uses ADC — no JSON key
 firebase deploy --only firestore:rules      # push the deny-all rules to your project
 
-npm test        # 96 tests
+npm test        # 129 tests
 npm run build   # production build
 npm run dev     # http://localhost:3000
 ```
@@ -343,6 +345,8 @@ The Gemini key is passed only as a runtime secret from Secret Manager; it is nev
 Google Cloud Run (`us-central1`), built from source with a multi‑stage Docker image (`node:20-alpine`, non‑root user, standalone Next.js server on port `8080`).
 
 Principles: a **dedicated runtime service account** with least‑privilege roles (Datastore user + Firebase Auth viewer) authenticating via **ADC** (no JSON key); **public Firebase web config** passed at build time; the **Gemini key** passed as a **runtime secret** from Secret Manager (never as a build argument or public variable).
+
+The `Dockerfile` ships **no** project‑specific Firebase defaults. `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID` and `NEXT_PUBLIC_FIREBASE_APP_ID` are **required** build arguments — the image build fails fast with a clear message if any is missing, so it can never be built silently against the wrong Firebase project. `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` and `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` are optional.
 
 ```bash
 # Store the Gemini key in Secret Manager (value from a local file you never commit)
@@ -386,7 +390,7 @@ src/
     ├── rate-limit.ts       best-effort in-memory per-user limiter
     └── validation.ts       isValidSessionId() · normalizeTitle()
 
-tests/            15 files, 96 tests
+tests/            20 files, 129 tests
 security/         architecture.md · security-constitution.md · threat-model.md
 firestore.rules   deny-all
 next.config.js    standalone output + security headers (incl. CSP)
@@ -402,7 +406,6 @@ Dockerfile        multi-stage · non-root · port 8080
 - **Durable, distributed rate limiting** — replace the in‑memory per‑instance limiter with a shared store for a hard global quota.
 - **Cross‑session analytics** — themes and trends over time (Action Intelligence is single‑session today).
 - **Configurable reflection templates** — user‑selectable prompt styles.
-- **A lease for the Summary guard** — matching the Action Intelligence lease, so a crashed summary self‑heals.
 - **Improved observability** — structured request logging, tracing, per‑endpoint metrics and alerts.
 
 ---

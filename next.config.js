@@ -27,20 +27,10 @@ const nextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()',
           },
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://apis.google.com https://www.gstatic.com",
-              "style-src 'self' 'unsafe-inline'",
-              "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.googleapis.com",
-              "frame-src https://accounts.google.com https://*.firebaseapp.com",
-              "img-src 'self' data: https:",
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join('; '),
-          },
+          // Content-Security-Policy is set per-request in `src/middleware.ts`
+          // so it can carry a nonce (dropping `script-src 'unsafe-inline'` and
+          // `'unsafe-eval'`). A static header here cannot mint a per-request
+          // nonce, and two CSP headers would be intersected by the browser.
         ],
       },
     ];
